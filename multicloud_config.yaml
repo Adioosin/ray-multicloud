@@ -1,0 +1,116 @@
+cluster_name: appfl-ray
+upscaling_speed: 1.0
+idle_timeout_minutes: 5
+provider:
+    type: external
+    module: ray.autoscaler._private.multicloud.node_provider.MulticloudProvider
+    use_internal_ips: false
+    use_external_head_ip: true
+    providers:
+        head_node_account:
+            type: aws
+            region: us-east-1
+            cache_stopped_nodes: false
+            use_internal_ips: false
+            use_external_head_ip: true
+            security_group:
+                GroupName: ray_client_security_group
+                IpPermissions:
+                    - FromPort: 8265
+                      ToPort: 8265
+                      IpProtocol: TCP
+                      IpRanges:
+                          - CidrIp: 0.0.0.0/0
+                    - FromPort: 6379
+                      ToPort: 6379
+                      IpProtocol: TCP
+                      IpRanges:
+                          - CidrIp: 0.0.0.0/0
+        account2:
+            type: aws
+            region: us-east-1
+            cache_stopped_nodes: false
+            use_internal_ips: false
+            use_external_head_ip: true
+            aws_credentials:
+                aws_access_key_id: "access_key_id"
+                aws_secret_access_key: "secret_access_key"
+            security_group:
+                GroupName: ray_client_security_group
+                IpPermissions:
+                    - FromPort: 8265
+                      ToPort: 8265
+                      IpProtocol: TCP
+                      IpRanges:
+                          - CidrIp: 0.0.0.0/0
+                    - FromPort: 6379
+                      ToPort: 6379
+                      IpProtocol: TCP
+                      IpRanges:
+                          - CidrIp: 0.0.0.0/0
+max_workers: 2
+available_node_types:
+    ray.head.default:
+        resources: {}
+        node_config:
+            account_name: head_node_account
+            InstanceType: t3.small
+            ImageId: ami-04811aea5282375b3
+    ray.worker.Client1:
+        min_workers: 0
+        max_workers: 1
+        resources:
+            Client1: 1
+        node_config:
+            account_name: head_node_account
+            InstanceType: t3.small
+            ImageId: ami-04811aea5282375b3
+            InstanceMarketOptions:
+                MarketType: spot
+    ray.worker.Client2:
+        min_workers: 0
+        max_workers: 1
+        resources:
+            Client2: 1
+        node_config:
+            account_name: account2
+            InstanceType: t3.small
+            ImageId: ami-04811aea5282375b3
+            InstanceMarketOptions:
+                MarketType: spot
+file_mounts:
+    /home/ubuntu/autoscaler: ./autoscaler
+    /home/ubuntu/resources: ./resources
+    /home/ubuntu/cost_aware_fl.py: cost_aware_fl.py
+    /home/ubuntu/test.py: test.py
+    /home/ubuntu/clients_info.json: clients_info.json
+    /home/ubuntu/models: ./models
+    /home/ubuntu/APPFL: ../APPFL
+setup_commands:
+- cd APPFL && pip install -e ".[examples]"
+- cp /home/ubuntu/autoscaler/_private/autoscaler.py /opt/conda/envs/APPFL/lib/python3.10/site-packages/ray/autoscaler/_private/autoscaler.py
+- cp /home/ubuntu/autoscaler/sdk/sdk.py /opt/conda/envs/APPFL/lib/python3.10/site-packages/ray/autoscaler/sdk/sdk.py
+- cp /home/ubuntu/autoscaler/_private/commands.py /opt/conda/envs/APPFL/lib/python3.10/site-packages/ray/autoscaler/_private/commands.py
+- cp /home/ubuntu/autoscaler/_private/monitor.py /opt/conda/envs/APPFL/lib/python3.10/site-packages/ray/autoscaler/_private/monitor.py
+- cp /home/ubuntu/autoscaler/_private/load_metrics.py /opt/conda/envs/APPFL/lib/python3.10/site-packages/ray/autoscaler/_private/load_metrics.py
+- cp /home/ubuntu/autoscaler/sdk/__init__.py /opt/conda/envs/APPFL/lib/python3.10/site-packages/ray/autoscaler/sdk/__init__.py
+- cp /home/ubuntu/autoscaler/_private/updater.py /opt/conda/envs/APPFL/lib/python3.10/site-packages/ray/autoscaler/_private/updater.py
+- cd /opt/conda/envs/APPFL/lib/python3.10/site-packages/ray/autoscaler/_private/ && mkdir multicloud
+- cp /home/ubuntu/autoscaler/_private/multicloud/node_provider.py /opt/conda/envs/APPFL/lib/python3.10/site-packages/ray/autoscaler/_private/multicloud/node_provider.py
+- cp /home/ubuntu/autoscaler/_private/multicloud/__init__.py /opt/conda/envs/APPFL/lib/python3.10/site-packages/ray/autoscaler/_private/multicloud/__init__.py
+- cp /home/ubuntu/autoscaler/v2/instance_manager/ray_installer.py /opt/conda/envs/APPFL/lib/python3.10/site-packages/ray/autoscaler/v2/instance_manager/ray_installer.py
+- cp /home/ubuntu/autoscaler/_private/aws/node_provider.py /opt/conda/envs/APPFL/lib/python3.10/site-packages/ray/autoscaler/_private/aws/node_provider.py
+
+head_setup_commands: []
+worker_setup_commands: []
+cluster_synced_files: []
+# remember to add --node-ip-address with public ip so that autoscaler works with IP
+head_start_ray_commands: ["ray stop",
+                          "ulimit -n 65536; ray start --head --port=6379 --object-manager-port=8076 --autoscaling-config=~/ray_bootstrap_config.yaml --dashboard-host=0.0.0.0 --node-ip-address=$(curl -s http://checkip.amazonaws.com)"]
+# remember to add --node-ip-address with public ip so that autoscaler works with IP
+worker_start_ray_commands: ["ray stop",
+                            "ulimit -n 65536; ray start --address=$RAY_HEAD_IP:6379 --object-manager-port=8076 --node-ip-address=$(curl -s http://checkip.amazonaws.com)"]
+initialization_commands: []
+auth:
+##    ssh_private_key: "/Users/adioosin/.ssh/ray-autoscaler_us-east-1.pem"
+    ssh_user: "ubuntu"
